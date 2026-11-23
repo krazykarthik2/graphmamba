@@ -87,13 +87,19 @@ def train_and_benchmark(model, name, train_batches, val_batches, steps=300, lr=2
             model = torch.compile(model)
         except Exception as e:
             print(f"torch.compile skipped: {e}")
+    else:
+        print(f"[{name}] Running in native PyTorch eager mode (zero JIT compile wait).")
+        sys.stdout.flush()
 
-    # Warmup step removed; optimizer state begins clean without unclipped gradients
+    print(f"[{name}] Initializing AdamW optimizer & criterion...")
+    sys.stdout.flush()
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
     criterion = nn.CrossEntropyLoss()
     use_bf16 = (device == 'cuda' and torch.cuda.is_bf16_supported())
 
+    print(f"[{name}] Starting training loop ({steps} steps)...")
+    sys.stdout.flush()
     if device == 'cuda':
         torch.cuda.synchronize()
     t0 = time.time()
@@ -113,7 +119,7 @@ def train_and_benchmark(model, name, train_batches, val_batches, steps=300, lr=2
 
         total_tokens_processed += x.numel()
 
-        if step % 50 == 0 or step == steps:
+        if step % 10 == 0 or step == 1 or step == steps:
             bpc_step = loss.item() / math.log(2.0)
             print(f"  Step {step:4d}/{steps} | Train Loss: {loss.item():.4f} | BPC: {bpc_step:.3f}")
             sys.stdout.flush()
