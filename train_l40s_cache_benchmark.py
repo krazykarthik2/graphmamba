@@ -59,14 +59,17 @@ def evaluate(model, val_batches, criterion, use_amp=True):
     total_tokens = 0
     with torch.no_grad():
         for x, y in val_batches:
-            with torch.cuda.amp.autocast(enabled=use_amp, dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16):
+            with torch.amp.autocast('cuda', enabled=use_amp, dtype=torch.bfloat16):
                 logits = model(x)
                 loss = criterion(logits.reshape(-1, 256), y.reshape(-1))
             total_loss += loss.item() * y.numel()
             total_tokens += y.numel()
     avg_loss = total_loss / total_tokens
     bpc = avg_loss / math.log(2.0)
-    ppl = math.exp(avg_loss)
+    try:
+        ppl = math.exp(min(avg_loss, 50.0))
+    except OverflowError:
+        ppl = float('inf')
     return bpc, ppl
 
 def train_and_benchmark(model, name, train_batches, val_batches, steps=300, lr=2e-3, device='cuda', compile_model=True):
@@ -85,18 +88,11 @@ def train_and_benchmark(model, name, train_batches, val_batches, steps=300, lr=2
         except Exception as e:
             print(f"torch.compile skipped: {e}")
 
+    # Warmup step removed; optimizer state begins clean without unclipped gradients
+    model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
     criterion = nn.CrossEntropyLoss()
-    scaler = torch.cuda.amp.GradScaler(enabled=(device == 'cuda' and not torch.cuda.is_bf16_supported()))
     use_bf16 = (device == 'cuda' and torch.cuda.is_bf16_supported())
-
-    # Warmup step
-    model.train()
-    x_warm, y_warm = train_batches[0]
-    with torch.cuda.amp.autocast(enabled=(device == 'cuda'), dtype=torch.bfloat16 if use_bf16 else torch.float16):
-        loss = criterion(model(x_warm).reshape(-1, 256), y_warm.reshape(-1))
-    loss.backward()
-    optimizer.zero_grad()
 
     if device == 'cuda':
         torch.cuda.synchronize()
@@ -107,20 +103,13 @@ def train_and_benchmark(model, name, train_batches, val_batches, steps=300, lr=2
         x, y = train_batches[step % len(train_batches)]
         optimizer.zero_grad()
         
-        with torch.cuda.amp.autocast(enabled=(device == 'cuda'), dtype=torch.bfloat16 if use_bf16 else torch.float16):
+        with torch.amp.autocast('cuda', enabled=(device == 'cuda'), dtype=torch.bfloat16):
             logits = model(x)
             loss = criterion(logits.reshape(-1, 256), y.reshape(-1))
 
-        if scaler.is_enabled():
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
 
         total_tokens_processed += x.numel()
 

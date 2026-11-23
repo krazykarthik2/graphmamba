@@ -22,6 +22,7 @@ class VectorizedCausalLaplacianDiffusion(nn.Module):
         init_timescales = torch.logspace(math.log10(2.0), math.log10(128.0), num_scales)
         self.log_timescales = nn.Parameter(torch.log(init_timescales))
         self.proj = nn.Linear(d_model * (num_scales + 1), d_model, bias=False)
+        nn.init.xavier_uniform_(self.proj.weight, gain=0.1)
         self.norm = nn.LayerNorm(d_model)
 
     def forward(self, x):
@@ -75,6 +76,7 @@ class VectorizedCompactMambaBlock(nn.Module):
         self.A_log = nn.Parameter(torch.log(A))
         self.D = nn.Parameter(torch.ones(self.d_inner))
         self.out_proj = nn.Linear(self.d_inner, d_model, bias=False)
+        nn.init.xavier_uniform_(self.out_proj.weight, gain=0.1)
 
     def forward(self, u):
         B, L, _ = u.shape
