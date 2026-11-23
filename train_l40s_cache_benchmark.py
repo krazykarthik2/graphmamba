@@ -143,6 +143,7 @@ def main():
     parser.add_argument("--steps", type=int, default=200, help="Training steps per model")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size")
     parser.add_argument("--lr", type=float, default=2e-3)
+    parser.add_argument("--compile", action="store_true", default=False, help="Enable torch.compile (requires Triton JIT)")
     args = parser.parse_args()
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -167,12 +168,12 @@ def main():
     # 1. Graph-Mamba Hybrid (Memory via Graph Laplacian, Decision via Mamba)
     print("\n>>> Model 1: Graph-Mamba Hybrid (Memory = Graph Diffusion, Decision = Mamba d_state=4)")
     m_hybrid = L40SGraphMambaLM(vocab_size=256, d_model=256, n_layers=6, d_state=4, num_scales=4)
-    bpc_h, ppl_h, p_h, t_h, tok_h = train_and_benchmark(m_hybrid, "Graph-Mamba", train_batches, val_batches, steps=args.steps, lr=args.lr, device=device)
+    bpc_h, ppl_h, p_h, t_h, tok_h = train_and_benchmark(m_hybrid, "Graph-Mamba", train_batches, val_batches, steps=args.steps, lr=args.lr, device=device, compile_model=args.compile)
 
     # 2. Pure Mamba (Standard Selective State Space)
     print("\n>>> Model 2: Pure Mamba (d_state=16)")
     m_pure = L40SPureMambaLM(vocab_size=256, d_model=256, n_layers=6, d_state=16)
-    bpc_p, ppl_p, p_p, t_p, tok_p = train_and_benchmark(m_pure, "Pure-Mamba", train_batches, val_batches, steps=args.steps, lr=args.lr, device=device)
+    bpc_p, ppl_p, p_p, t_p, tok_p = train_and_benchmark(m_pure, "Pure-Mamba", train_batches, val_batches, steps=args.steps, lr=args.lr, device=device, compile_model=args.compile)
 
     print("\n" + "=" * 85)
     print("                            FINAL EMPIRICAL RESULTS")
