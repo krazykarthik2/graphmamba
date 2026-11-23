@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Large datasets & binaries
+*.zip
+*.tar.gz
+*.tar
+enwik8
+cifar-10-batches-py/
+*.onnx.data
+*.bin
+*.pt
+*.pth
+*.bnar
+
+# VSCode / IDE
+.vscode/
+.idea/
+*.swp
