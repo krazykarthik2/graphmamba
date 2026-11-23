@@ -103,6 +103,7 @@ def train_and_benchmark(model, name, train_batches, val_batches, steps=300, lr=2
     if device == 'cuda':
         torch.cuda.synchronize()
     t0 = time.time()
+    step_t0 = time.time()
     total_tokens_processed = 0
 
     for step in range(1, steps + 1):
@@ -117,11 +118,21 @@ def train_and_benchmark(model, name, train_batches, val_batches, steps=300, lr=2
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
-        total_tokens_processed += x.numel()
+        num_toks = x.numel()
+        total_tokens_processed += num_toks
+        elapsed_step = time.time() - step_t0
+        step_t0 = time.time()
 
-        if step % 10 == 0 or step == 1 or step == steps:
+        # Continuous live progress display on every step or interval
+        if step % 5 == 0 or step <= 10 or step == steps:
             bpc_step = loss.item() / math.log(2.0)
-            print(f"  Step {step:4d}/{steps} | Train Loss: {loss.item():.4f} | BPC: {bpc_step:.3f}")
+            tok_s = num_toks / (elapsed_step + 1e-6)
+            total_elapsed = time.time() - t0
+            pct = 100.0 * step / steps
+            bar_len = 20
+            filled = int(bar_len * step / steps)
+            bar = '█' * filled + '-' * (bar_len - filled)
+            print(f"[{name}] [{bar}] {pct:5.1f}% | Step {step:3d}/{steps} | Loss: {loss.item():.4f} | BPC: {bpc_step:.3f} | Speed: {tok_s:7.0f} tok/s | Time: {total_elapsed:5.1f}s")
             sys.stdout.flush()
 
     if device == 'cuda':
