@@ -13,10 +13,10 @@ python3 -c "import torch; print(f'PyTorch {torch.__version__} | CUDA available: 
 
 echo "=== Running Cache-Resident Long-Sequence Benchmark (L=2048) ==="
 # Sized specifically to fit entirely within the 96 MB L2 cache of NVIDIA L40S
-# Runs directly in the host environment (no venv)
+# Runs instantly with native PyTorch BF16 (torch.compile bypassed)
 if command -v python3 &> /dev/null; then
-    python3 -u train_l40s_cache_benchmark.py --seq_len 2048 --steps 300 --batch_size 4 --lr 0.002
+    python3 -u train_l40s_cache_benchmark.py --seq_len 2048 --steps 300 --batch_size 4 --lr 0.001 --no_compile
 else
-    python -u train_l40s_cache_benchmark.py --seq_len 2048 --steps 300 --batch_size 4 --lr 0.002
+    python -u train_l40s_cache_benchmark.py --seq_len 2048 --steps 300 --batch_size 4 --lr 0.001 --no_compile
 fi
 
